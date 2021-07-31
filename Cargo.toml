@@ -1,9 +1,12 @@
 [package]
 name = "jit-sys"
+description = "libjit in rust"
 version = "0.1.0"
 edition = "2018"
+license = "MIT"
+license-file = "LICENSE.txt"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+repository = "https://github.com/MonliH/jit-sys"
 
 [dependencies]
 
