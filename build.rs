@@ -47,35 +47,40 @@ fn main() {
     let submod_path =
         Path::new(&env::var("CARGO_MANIFEST_DIR").ok().expect(USE_CARGO_MSG)).join("libjit");
     let final_lib_dir = submod_path.join("jit/.libs");
-    println!("{}", std::env::current_dir().unwrap().display());
-    run(
-        Command::new("git").args(&["submodule", "update", "--init"]),
-        None,
-    );
-    run(
-        Command::new("sh")
-            .current_dir(&submod_path)
-            .arg("bootstrap"),
-        Some(INSTALL_AUTOTOOLS_MSG),
-    );
-    run(
-        Command::new("sh")
-            .current_dir(&submod_path)
-            .env("CFLAGS", "-fPIC")
-            .args(&[
-                "configure",
-                "--enable-static",
-                "--disable-shared",
-                &format!("--host={}", target),
-            ]),
-        Some(INSTALL_COMPILER_MSG),
-    );
-    run(
-        Command::new("make")
-            .arg(&format!("-j{}", num_jobs))
-            .current_dir(&submod_path),
-        None,
-    );
+
+    if !exists(&final_lib_dir.join(FINAL_LIB)).unwrap() {
+        if !Path::new(".git/").exists() {
+            run(Command::new("git").args(&["init"]), None);
+        }
+        run(
+            Command::new("git").args(&["submodule", "update", "--init"]),
+            None,
+        );
+        run(
+            Command::new("sh")
+                .current_dir(&submod_path)
+                .arg("bootstrap"),
+            Some(INSTALL_AUTOTOOLS_MSG),
+        );
+        run(
+            Command::new("sh")
+                .current_dir(&submod_path)
+                .env("CFLAGS", "-fPIC")
+                .args(&[
+                    "configure",
+                    "--enable-static",
+                    "--disable-shared",
+                    &format!("--host={}", target),
+                ]),
+            Some(INSTALL_COMPILER_MSG),
+        );
+        run(
+            Command::new("make")
+                .arg(&format!("-j{}", num_jobs))
+                .current_dir(&submod_path),
+            None,
+        );
+    }
     let from = final_lib_dir.join(FINAL_LIB);
     let to = out_dir.join(FINAL_LIB);
     if let Err(error) = fs::copy(&from, &to) {
