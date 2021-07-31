@@ -12,3 +12,9 @@ libc = "0.2.98"
 
 [build-dependencies]
 bindgen = "0.59.1"
+
+[features]
+docs-rs = []
+
+[package.metadata.docs.rs]
+features = ["docs-rs"]

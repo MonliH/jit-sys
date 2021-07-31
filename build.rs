@@ -34,6 +34,10 @@ fn exists<P: AsRef<Path>>(path: P) -> io::Result<bool> {
     }
 }
 
+#[cfg(feature = "docs-rs")]
+fn main() {}
+
+#[cfg(not(feature = "docs-rs"))]
 fn main() {
     println!("cargo:rerun-if-changed=wrapper.h");
 
