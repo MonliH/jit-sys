@@ -146,11 +146,12 @@ fn main() {
         }
 
         let bindings = builder
+            .layout_tests(false)
             .parse_callbacks(Box::new(bindgen::CargoCallbacks))
             .generate()
             .expect("Unable to generate bindings");
         bindings
-            .write_to_file("bindings.rs")
+            .write_to_file("src/lib.rs")
             .expect("Couldn't write bindings!");
     }
 }
