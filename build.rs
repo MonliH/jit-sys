@@ -47,49 +47,34 @@ fn main() {
     let submod_path =
         Path::new(&env::var("CARGO_MANIFEST_DIR").ok().expect(USE_CARGO_MSG)).join("libjit");
     let final_lib_dir = submod_path.join("jit/.libs");
-    if !exists(&final_lib_dir.join(FINAL_LIB)).unwrap() {
-        Command::new("git")
-            .args(&["submodule", "init"])
-            .status()
-            .unwrap();
-        run(Command::new("git").args(&["submodule", "update"]), None);
-        if !exists(&submod_path).unwrap() {
-            run(
-                Command::new("git").args(&[
-                    "clone",
-                    "git://git.savannah.gnu.org/libjit.git",
-                    submod_path.to_str().unwrap(),
-                ]),
-                None,
-            )
-        }
-        run(
-            Command::new("sh")
-                .current_dir(&submod_path)
-                .arg("bootstrap"),
-            Some(INSTALL_AUTOTOOLS_MSG),
-        );
-        run(
-            Command::new("sh")
-                .current_dir(&submod_path)
-                .env("CFLAGS", "-fPIC")
-                .args(&[
-                    "configure",
-                    "--enable-static",
-                    "--disable-shared",
-                    &format!("--host={}", target),
-                ]),
-            Some(INSTALL_COMPILER_MSG),
-        );
-        run(
-            Command::new("make")
-                .arg(&format!("-j{}", num_jobs))
-                .current_dir(&submod_path),
-            None,
-        );
-    } else {
-        println!("LibJIT has already been built")
-    }
+    run(
+        Command::new("git").args(&["submodule", "update", "--init"]),
+        None,
+    );
+    run(
+        Command::new("sh")
+            .current_dir(&submod_path)
+            .arg("bootstrap"),
+        Some(INSTALL_AUTOTOOLS_MSG),
+    );
+    run(
+        Command::new("sh")
+            .current_dir(&submod_path)
+            .env("CFLAGS", "-fPIC")
+            .args(&[
+                "configure",
+                "--enable-static",
+                "--disable-shared",
+                &format!("--host={}", target),
+            ]),
+        Some(INSTALL_COMPILER_MSG),
+    );
+    run(
+        Command::new("make")
+            .arg(&format!("-j{}", num_jobs))
+            .current_dir(&submod_path),
+        None,
+    );
     let from = final_lib_dir.join(FINAL_LIB);
     let to = out_dir.join(FINAL_LIB);
     if let Err(error) = fs::copy(&from, &to) {
