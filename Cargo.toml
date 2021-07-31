@@ -8,6 +8,7 @@ license = "MIT"
 repository = "https://github.com/MonliH/jit-sys"
 
 [dependencies]
+libc = "*"
 
 [build-dependencies]
 bindgen = "0.59.1"
