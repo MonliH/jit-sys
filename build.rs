@@ -44,16 +44,14 @@ fn main() {
     let num_jobs = env::var("NUM_JOBS").ok().expect(USE_CARGO_MSG);
     let target = env::var("TARGET").ok().expect(USE_CARGO_MSG);
     let out_dir = Path::new(&*out_dir);
-    let submod_path =
-        Path::new(&env::var("CARGO_MANIFEST_DIR").ok().expect(USE_CARGO_MSG)).join("libjit");
+    let submod_path = out_dir.join("libjit");
     let final_lib_dir = submod_path.join("jit/.libs");
 
     if !exists(&final_lib_dir.join(FINAL_LIB)).unwrap() {
-        if !Path::new(".git/").exists() {
-            run(Command::new("git").args(&["init"]), None);
-        }
         run(
-            Command::new("git").args(&["submodule", "update", "--init"]),
+            Command::new("git")
+                .args(&["clone", "git://git.savannah.gnu.org/libjit.git"])
+                .arg(submod_path.as_os_str()),
             None,
         );
         run(

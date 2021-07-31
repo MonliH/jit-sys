@@ -1,3 +1,0 @@
-[submodule "libjit"]
-	path = libjit
-	url = git://git.savannah.gnu.org/libjit.git
