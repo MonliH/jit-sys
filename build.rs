@@ -47,7 +47,7 @@ fn main() {
     let submod_path =
         Path::new(&env::var("CARGO_MANIFEST_DIR").ok().expect(USE_CARGO_MSG)).join("libjit");
     let final_lib_dir = submod_path.join("jit/.libs");
-    println!("{}", std::env::current_dir());
+    println!("{}", std::env::current_dir().unwrap().display());
     run(
         Command::new("git").args(&["submodule", "update", "--init"]),
         None,
