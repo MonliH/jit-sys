@@ -1041,20 +1041,30 @@ extern "C" {
         type_: jit_type_t,
     );
 
+    /// Get the function that a particular `block` belongs to.
     pub fn jit_block_get_function(block: jit_block_t) -> jit_function_t;
 
+    /// Get the context that a particular `block` belongs to.
     pub fn jit_block_get_context(block: jit_block_t) -> jit_context_t;
 
+    /// Get the label associated with a block.
     pub fn jit_block_get_label(block: jit_block_t) -> jit_label_t;
 
+    /// Get the next label associated with a block.
     pub fn jit_block_get_next_label(block: jit_block_t, label: jit_label_t) -> jit_label_t;
 
+    /// Iterate over the blocks in a function, in order of their creation. The `previous` argument should be NULL on the first call. This function will return NULL if there are no further blocks to iterate.
     pub fn jit_block_next(func: jit_function_t, previous: jit_block_t) -> jit_block_t;
 
+    /// Iterate over the blocks in a function, in reverse order of their creation. The `previous` argument should be NULL on the first call. This function will return NULL if there are no further blocks to iterate.
     pub fn jit_block_previous(func: jit_function_t, previous: jit_block_t) -> jit_block_t;
 
+    /// Get the block that corresponds to a particular label. Returns NULL if there is no block associated with the label.
     pub fn jit_block_from_label(func: jit_function_t, label: jit_label_t) -> jit_block_t;
 
+    /// Tag a block with some metadata. Returns zero if out of memory. If the `type` already has some metadata associated with it, then the previous value will be freed. Metadata may be used to store dependency graphs, branch prediction information, or any other information that is useful to optimizers or code generators.
+    ///
+    /// Metadata type values of 10000 or greater are reserved for internal use.
     pub fn jit_block_set_meta(
         block: jit_block_t,
         type_: ::std::os::raw::c_int,
@@ -1062,17 +1072,22 @@ extern "C" {
         free_data: jit_meta_free_func,
     ) -> ::std::os::raw::c_int;
 
+    /// Get the metadata associated with a particular tag. Returns NULL if `type` does not have any metadata associated with it.
     pub fn jit_block_get_meta(
         block: jit_block_t,
         type_: ::std::os::raw::c_int,
     ) -> *mut ::std::os::raw::c_void;
 
+    /// Free metadata of a specific type on a block. Does nothing if the `type` does not have any metadata associated with it.
     pub fn jit_block_free_meta(block: jit_block_t, type_: ::std::os::raw::c_int);
 
+    /// Determine if a block is reachable from some other point in its function. Unreachable blocks can be discarded in their entirety. If the JIT is uncertain as to whether a block is reachable, or it does not wish to perform expensive flow analysis to find out, then it will err on the side of caution and assume that it is reachable.
     pub fn jit_block_is_reachable(block: jit_block_t) -> ::std::os::raw::c_int;
 
+    /// Determine if a block ends in a "dead" marker. That is, control will not fall out through the end of the block.
     pub fn jit_block_ends_in_dead(block: jit_block_t) -> ::std::os::raw::c_int;
 
+    /// Determine if the current point in the function is dead. That is, there are no existing branches or fall-throughs to this point. This differs slightly from [`jit_block_ends_in_dead`] in that this can skip past zero-length blocks that may not appear to be dead to find the dead block at the head of a chain of empty blocks.
     pub fn jit_block_current_is_dead(func: jit_function_t) -> ::std::os::raw::c_int;
 }
 pub type jit_debugger = c_void;
@@ -3296,87 +3311,128 @@ pub union jit_constant_t__bindgen_ty_1 {
 }
 
 extern "C" {
+    /// Create a new value in the context of a function’s current block. The value initially starts off as a block-specific temporary. It will be converted into a function-wide local variable if it is ever referenced from a different block. Returns NULL if out of memory.
+    ///
+    /// Note: It isn’t possible to refer to global variables directly using values. If you need to access a global variable, then load its address into a temporary and use [`jit_insn_load_relative`] or [`jit_insn_store_relative`] to manipulate it. It simplifies the JIT if it can assume that all values are local.
     pub fn jit_value_create(func: jit_function_t, type_: jit_type_t) -> jit_value_t;
 
+    /// Create a new native integer constant in the specified function. Returns NULL if out of memory.
+    ///
+    /// The `type` parameter indicates the actual type of the constant, if it happens to be something other than [`jit_type_nint`]. For example, the following will create an unsigned byte constant:
+    ///
+    /// ```no_run
+    /// value = jit_value_create_nint_constant(func, jit_type_ubyte, 128);
+    /// ```
+    /// This function can be used to create constants of type [`jit_type_sbyte`], [`jit_type_ubyte`], [`jit_type_short`], [`jit_type_ushort`], [`jit_type_int`], [`jit_type_uint`], [`jit_type_nint`], [`jit_type_nuint`], and all pointer types.
     pub fn jit_value_create_nint_constant(
         func: jit_function_t,
         type_: jit_type_t,
         const_value: jit_nint,
     ) -> jit_value_t;
 
+    /// Create a new 64-bit integer constant in the specified function. This can also be used to create constants of type [`jit_type_ulong`]. Returns NULL if out of memory.
     pub fn jit_value_create_long_constant(
         func: jit_function_t,
         type_: jit_type_t,
         const_value: jit_long,
     ) -> jit_value_t;
 
+    /// Create a new 32-bit floating-point constant in the specified function. Returns NULL if out of memory.
     pub fn jit_value_create_float32_constant(
         func: jit_function_t,
         type_: jit_type_t,
         const_value: jit_float32,
     ) -> jit_value_t;
 
+    /// Create a new 64-bit floating-point constant in the specified function. Returns NULL if out of memory.
     pub fn jit_value_create_float64_constant(
         func: jit_function_t,
         type_: jit_type_t,
         const_value: jit_float64,
     ) -> jit_value_t;
 
+    /// Create a new native floating-point constant in the specified function. Returns NULL if out of memory.
     pub fn jit_value_create_nfloat_constant(
         func: jit_function_t,
         type_: jit_type_t,
         const_value: jit_nfloat,
     ) -> jit_value_t;
 
+    /// Create a new constant from a generic constant structure in the specified function. Returns NULL if out of memory or if the type in `const_value` is not suitable for a constant.
     pub fn jit_value_create_constant(
         func: jit_function_t,
         const_value: *const jit_constant_t,
     ) -> jit_value_t;
 
+    /// Get the value that corresponds to a specified function parameter. Returns NULL if out of memory or `param` is invalid.
     pub fn jit_value_get_param(func: jit_function_t, param: ::std::os::raw::c_uint) -> jit_value_t;
 
+    /// Get the value that contains the structure return pointer for a function. If the function does not have a structure return pointer (i.e. structures are returned in registers), then this returns NULL.
     pub fn jit_value_get_struct_pointer(func: jit_function_t) -> jit_value_t;
 
+    /// Determine if a value is temporary. i.e. its scope extends over a single block within its function.
     pub fn jit_value_is_temporary(value: jit_value_t) -> ::std::os::raw::c_int;
 
+    /// Determine if a value is local. i.e. its scope extends over multiple blocks within its function.
     pub fn jit_value_is_local(value: jit_value_t) -> ::std::os::raw::c_int;
 
+    /// Determine if a value is a constant.
     pub fn jit_value_is_constant(value: jit_value_t) -> ::std::os::raw::c_int;
 
+    /// Determine if a value is a function parameter.
     pub fn jit_value_is_parameter(value: jit_value_t) -> ::std::os::raw::c_int;
 
+    /// Create a reference to the specified `value` from the current block in `func`. This will convert a temporary `value` into a local value if value is being referenced from a different block than its original.
+    ///
+    /// It is not necessary that `func` be the same function as the one where the value was originally created. It may be a nested function, referring to a local variable in its parent function.
     pub fn jit_value_ref(func: jit_function_t, value: jit_value_t);
 
+    /// Set a flag on a value to indicate that it is volatile. The contents of the value must always be reloaded from memory, never from a cached register copy.
     pub fn jit_value_set_volatile(value: jit_value_t);
 
+    /// Determine if a value is volatile.
     pub fn jit_value_is_volatile(value: jit_value_t) -> ::std::os::raw::c_int;
 
+    /// Set a flag on a value to indicate that it is addressable. This should be used when you want to take the address of a value (e.g. `&variable` in C). The value is guaranteed to not be stored in a register across a function call. If you refer to a value from a nested function ([`jit_value_ref`]), then the value will be automatically marked as addressable.
     pub fn jit_value_set_addressable(value: jit_value_t);
 
+    /// Determine if a value is addressable.
     pub fn jit_value_is_addressable(value: jit_value_t) -> ::std::os::raw::c_int;
 
+    /// Get the type that is associated with a value.
     pub fn jit_value_get_type(value: jit_value_t) -> jit_type_t;
 
+    /// Get the function which owns a particular `value`.
     pub fn jit_value_get_function(value: jit_value_t) -> jit_function_t;
 
+    /// Get the block which owns a particular `value`.
     pub fn jit_value_get_block(value: jit_value_t) -> jit_block_t;
 
+    /// Get the context which owns a particular `value`.
     pub fn jit_value_get_context(value: jit_value_t) -> jit_context_t;
 
+    /// Get the constant value within a particular `value`. The returned structure’s type field will be [`jit_type_void`] if `value` is not a constant.
     pub fn jit_value_get_constant(value: jit_value_t) -> jit_constant_t;
 
+    /// Get the constant value within a particular `value`, assuming that its type is compatible with [`jit_type_nint`].
     pub fn jit_value_get_nint_constant(value: jit_value_t) -> jit_nint;
 
+    /// Get the constant value within a particular `value`, assuming that its type is compatible with [`jit_type_long`].
     pub fn jit_value_get_long_constant(value: jit_value_t) -> jit_long;
 
+    /// Get the constant value within a particular `value`, assuming that its type is compatible with [`jit_type_float32`].
     pub fn jit_value_get_float32_constant(value: jit_value_t) -> jit_float32;
 
+    /// Get the constant value within a particular `value`, assuming that its type is compatible with [`jit_type_float64`].
     pub fn jit_value_get_float64_constant(value: jit_value_t) -> jit_float64;
 
+    /// Get the constant value within a particular `value`, assuming that its type is compatible with [`jit_type_nfloat`].
     pub fn jit_value_get_nfloat_constant(value: jit_value_t) -> jit_nfloat;
 
+    /// Determine if `value` is constant and non-zero.
     pub fn jit_value_is_true(value: jit_value_t) -> ::std::os::raw::c_int;
 
+    /// Convert a the constant `value` into a new `type`, and return its value in `result`. Returns zero if the conversion is not possible, usually due to overflow.
     pub fn jit_constant_convert(
         result: *mut jit_constant_t,
         value: *const jit_constant_t,
