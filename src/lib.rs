@@ -632,6 +632,7 @@ pub const JIT_OP_BR_NFNE_INV: u32 = 171;
 pub const JIT_FAST_GET_CURRENT_FRAME: u32 = 1;
 
 pub const jit_label_undefined: jit_label_t = !0;
+pub const JIT_NO_OFFSET: c_uint = !0;
 
 pub type jit_sbyte = ::std::os::raw::c_char;
 pub type jit_ubyte = ::std::os::raw::c_uchar;
@@ -1303,43 +1304,77 @@ pub type jit_exception_func = ::std::option::Option<
     unsafe extern "C" fn(exception_type: ::std::os::raw::c_int) -> *mut ::std::os::raw::c_void,
 >;
 extern "C" {
+    /// Get the last exception object that occurred on this thread, or NULL if there is no exception object on this thread. As far as `libjit` is concerned, an exception is just a pointer. The precise meaning of the data at the pointer is determined by the front end.
     pub fn jit_exception_get_last() -> *mut ::std::os::raw::c_void;
 
+    /// Get the last exception object that occurred on this thread and also clear the exception state to NULL. This combines the effect of both [`jit_exception_get_last`] and [`jit_exception_clear_last`].
     pub fn jit_exception_get_last_and_clear() -> *mut ::std::os::raw::c_void;
 
+    /// Set the last exception object that occurred on this thread, so that it can be retrieved by a later call to [`jit_exception_get_last`]. This is normally used by [`jit_function_apply`] to save the exception object before returning to regular code.
     pub fn jit_exception_set_last(object: *mut ::std::os::raw::c_void);
 
+    /// Clear the last exception object that occurred on this thread. This is equivalent to calling [`jit_exception_set_last`] with a parameter of NULL.
     pub fn jit_exception_clear_last();
 
+    /// Throw an exception object within the current thread. As far as `libjit` is concerned, the exception object is just a pointer. The precise meaning of the data at the pointer is determined by the front end.
+    ///
+    /// Note: as an exception object works its way back up the stack, it may be temporarily stored in memory that is not normally visible to a garbage collector. The front-end is responsible for taking steps to "pin" the object so that it is uncollectable until explicitly copied back into a location that is visible to the collector once more.
     pub fn jit_exception_throw(object: *mut ::std::os::raw::c_void);
 
+    /// This function is called to report a builtin exception. The JIT will automatically embed calls to this function wherever a builtin exception needs to be reported.
+    /// When a builtin exception occurs, the current thread’s exception handler is called to construct an appropriate object, which is then thrown.
+    /// If there is no exception handler set, or the handler returns NULL, then `libjit` will print an error message to stderr and cause the program to exit with a status of 1. You normally don’t want this behavior and you should override it if possible.
+    ///
+    /// The following builtin exception types are currently supported:
+    ///
+    /// | Type | Description |
+    /// | ---- | ----------- |
+    /// | JIT_RESULT_OK | The operation was performed successfully (value is 1). |
+    /// | JIT_RESULT_OVERFLOW | The operation resulted in an overflow exception (value is 0). |
+    /// | JIT_RESULT_ARITHMETIC | The operation resulted in an arithmetic exception. i.e. an attempt was made to divide the minimum integer value by -1 (value is -1). |
+    /// | JIT_RESULT_DIVISION_BY_ZERO | The operation resulted in a division by zero exception (value is -2). |
+    /// | JIT_RESULT_COMPILE_ERROR | An error occurred when attempting to dynamically compile a function (value is -3). |
+    /// | JIT_RESULT_OUT_OF_MEMORY | The system ran out of memory while performing an operation (value is -4). |
+    /// | JIT_RESULT_NULL_REFERENCE | An attempt was made to dereference a NULL pointer (value is -5). |
+    /// | JIT_RESULT_NULL_FUNCTION | An attempt was made to call a function with a NULL function pointer (value is -6). |
+    /// | JIT_RESULT_CALLED_NESTED | An attempt was made to call a nested function from a non-nested context (value is -7). |
+    /// | JIT_RESULT_OUT_OF_BOUNDS | The operation resulted in an out of bounds array access (value is -8). |
+    /// | JIT_RESULT_UNDEFINED_LABEL | A branch operation used a label that was not defined anywhere in the function (value is -9). |
     pub fn jit_exception_builtin(exception_type: ::std::os::raw::c_int);
 
+    /// Set the builtin exception handler for the current thread. Returns the previous exception handler.
     pub fn jit_exception_set_handler(handler: jit_exception_func) -> jit_exception_func;
 
+    /// Get the builtin exception handler for the current thread.
     pub fn jit_exception_get_handler() -> jit_exception_func;
 
+    /// Create an object that represents the current call stack. This is normally used to indicate the location of an exception. Returns NULL if a stack trace is not available, or there is insufficient memory to create it.
     pub fn jit_exception_get_stack_trace() -> jit_stack_trace_t;
 
+    /// Get the size of a stack trace.
     pub fn jit_stack_trace_get_size(trace: jit_stack_trace_t) -> ::std::os::raw::c_uint;
 
+    /// Get the function that is at position `posn` within a stack trace. Position 0 is the function that created the stack trace. If this returns NULL, then it indicates that there is a native callout at `posn` within the stack trace.
     pub fn jit_stack_trace_get_function(
         context: jit_context_t,
         trace: jit_stack_trace_t,
         posn: ::std::os::raw::c_uint,
     ) -> jit_function_t;
 
+    /// Get the program counter that corresponds to position `posn` within a stack trace. This is the point within the function where execution had reached at the time of the trace.
     pub fn jit_stack_trace_get_pc(
         trace: jit_stack_trace_t,
         posn: ::std::os::raw::c_uint,
     ) -> *mut ::std::os::raw::c_void;
 
+    /// Get the bytecode offset that is recorded for position posn within a stack trace. This will be [`JIT_NO_OFFSET`] if there is no bytecode offset associated with `posn`.
     pub fn jit_stack_trace_get_offset(
         context: jit_context_t,
         trace: jit_stack_trace_t,
         posn: ::std::os::raw::c_uint,
     ) -> ::std::os::raw::c_uint;
 
+    /// Free the memory associated with a stack trace.
     pub fn jit_stack_trace_free(trace: jit_stack_trace_t);
 
     pub fn jit_function_create(context: jit_context_t, signature: jit_type_t) -> jit_function_t;
