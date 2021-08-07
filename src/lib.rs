@@ -2268,6 +2268,39 @@ extern "C" {
     /// Mark the current position in `func` as corresponding to the specified bytecode `offset`. This value will be returned byw]lysw`jit_stack_trace_get_offset, and is useful for associating code positions with source line numbers.
     pub fn jit_insn_mark_offset(func: jit_function_t, offset: jit_int) -> ::std::os::raw::c_int;
 
+    /// Mark the current position in `func` as corresponding to a breakpoint location. When a break occurs, the debugging routines are passed `func`, `data1`, and `data2` as arguments. By convention, `data1` is the type of breakpoint (source line, function entry, function exit, etc).
+    ///
+    /// There are two ways for a front end to receive notification about breakpoints. The bulk of this chapter describes the [`jit_debugger_t`] interface, which handles most of the ugly details. In addition, a low-level "debug hook mechanism" is provided for front ends that wish more control over the process. The debug hook mechanism is described below, under the [`jit_debugger_set_hook`] function.
+    ///
+    /// This debugger implementation requires a threading system to work successfully. At least two threads are required, in addition to those of the program being debugged:
+    ///
+    /// 1. Event thread which calls [`jit_debugger_wait_event`] to receive notifications of breakpoints and other interesting events.
+    /// 2. User interface thread which calls functions like [`jit_debugger_run`], [`jit_debugger_step`], etc, to control the debug process.
+    ///
+    /// These two threads should be set to "unbreakable" with a call to [`jit_debugger_set_breakable`]. This prevents them from accidentally stopping at a breakpoint, which would cause a system deadlock. Other housekeeping threads, such as a finalization thread, should also be set to "unbreakable" for the same reason.
+    ///
+    /// Events have the following members:
+    ///
+    /// | Member | Description |
+    /// | ------ | ----------- |
+    /// | `type` | The type of event (see the next table for details). |
+    /// | `thread` | The thread that the event occurred on. |
+    /// | `function` | The function that the breakpoint occurred within. |
+    /// | `data1` + `data2` | The data values at the breakpoint. These values are inserted into the function’s code with [`jit_insn_mark_breakpoint`]. |
+    /// | `id` | The identifier for the breakpoint. |
+    /// | `trace` | The stack trace corresponding to the location where the breakpoint occurred. This value is automatically freed upon the next call to [`jit_debugger_wait_event`]. If you wish to preserve the value, then you must call jit_stack_trace_copy. |
+    ///
+    /// The following event types are currently supported:
+    ///
+    /// | Event Type | Description |
+    /// | ---------- | ----------- |
+    /// | JIT_DEBUGGER_TYPE_QUIT | A thread called [`jit_debugger_quit`], indicating that it wanted the event thread to terminate. |
+    /// | JIT_DEBUGGER_TYPE_HARD_BREAKPOINT | A thread stopped at a hard breakpoint. That is, a breakpoint defined by a call to [`jit_debugger_add_breakpoint`]. |
+    /// | JIT_DEBUGGER_TYPE_SOFT_BREAKPOINT | A thread stopped at a breakpoint that wasn’t explicitly defined by a call to [`jit_debugger_add_breakpoint`]. This typicaly results from a call to a "step" function like [`jit_debugger_step`], where execution stopped at the next line but there isn’t an explicit breakpoint on that line. |
+    /// | JIT_DEBUGGER_TYPE_USER_BREAKPOINT | A thread stopped because of a call to [`jit_debugger_break`]. |
+    /// | JIT_DEBUGGER_TYPE_ATTACH_THREAD | A thread called [`jit_debugger_attach_self`]. The data1 field of the event is set to the value of stop_immediately for the call. |
+    /// | JIT_DEBUGGER_TYPE_DETACH_THREAD | A thread called [`jit_debugger_detach_self`]. |
+    ///
     pub fn jit_insn_mark_breakpoint(
         func: jit_function_t,
         data1: jit_nint,
