@@ -630,6 +630,9 @@ pub const JIT_OP_BR_DNE_INV: u32 = 161;
 pub const JIT_OP_BR_NFEQ_INV: u32 = 170;
 pub const JIT_OP_BR_NFNE_INV: u32 = 171;
 pub const JIT_FAST_GET_CURRENT_FRAME: u32 = 1;
+
+pub const jit_label_undefined: jit_label_t = !0;
+
 pub type jit_sbyte = ::std::os::raw::c_char;
 pub type jit_ubyte = ::std::os::raw::c_uchar;
 pub type jit_short = ::std::os::raw::c_short;
@@ -1476,45 +1479,66 @@ pub struct jit_insn_iter_t {
 }
 
 extern "C" {
+    /// Get the opcode that is associated with an instruction.
     pub fn jit_insn_get_opcode(insn: jit_insn_t) -> ::std::os::raw::c_int;
 
+    /// Get the destination value that is associated with an instruction. Returns NULL if the instruction does not have a destination.
     pub fn jit_insn_get_dest(insn: jit_insn_t) -> jit_value_t;
 
+    /// Get the first argument value that is associated with an instruction. Returns NULL if the instruction does not have a first argument value.
     pub fn jit_insn_get_value1(insn: jit_insn_t) -> jit_value_t;
 
+    /// Get the second argument value that is associated with an instruction. Returns NULL if the instruction does not have a second argument value.
     pub fn jit_insn_get_value2(insn: jit_insn_t) -> jit_value_t;
 
+    /// Get the label for a branch target from an instruction. Returns NULL if the instruction does not have a branch target.
     pub fn jit_insn_get_label(insn: jit_insn_t) -> jit_label_t;
 
+    /// Get the function for a call instruction. Returns NULL if the instruction does not refer to a called function.
     pub fn jit_insn_get_function(insn: jit_insn_t) -> jit_function_t;
 
+    /// Get the function pointer for a native call instruction. Returns NULL if the instruction does not refer to a native function call.
     pub fn jit_insn_get_native(insn: jit_insn_t) -> *mut ::std::os::raw::c_void;
 
+    /// Get the diagnostic name for a function call. Returns NULL if the instruction does not have a diagnostic name.
     pub fn jit_insn_get_name(insn: jit_insn_t) -> *const ::std::os::raw::c_char;
 
+    /// Get the signature for a function call instruction. Returns NULL if the instruction is not a function call.
     pub fn jit_insn_get_signature(insn: jit_insn_t) -> jit_type_t;
 
+    /// Returns a non-zero value if the destination for `insn` is actually a source value. This can happen with instructions such as jit_insn_store_relative where the instruction needs three source operands, and the real destination is a side-effect on one of the sources.
     pub fn jit_insn_dest_is_value(insn: jit_insn_t) -> ::std::os::raw::c_int;
 
+    /// Start a new basic block within the function `func` and give it the specified `label`. Returns zero if out of memory.
+    ///
+    /// If the contents of `label` are [`jit_label_undefined`], then this function will allocate a new label for this block. Otherwise it will reuse the specified label from a previous branch instruction.
     pub fn jit_insn_label(func: jit_function_t, label: *mut jit_label_t) -> ::std::os::raw::c_int;
 
+    /// Start a new basic block within the function `func` and give it the specified `label` but attempt to reuse the last block if it is empty. Returns zero if out of memory.
+
+    /// If the contents of `label` are [`jit_label_undefined`], then this function will allocate a new label for this block. Otherwise it will reuse the specified label from a previous branch instruction.
     pub fn jit_insn_label_tight(
         func: jit_function_t,
         label: *mut jit_label_t,
     ) -> ::std::os::raw::c_int;
 
+    /// Start a new basic block, without giving it an explicit label. Returns a non-zero value on success.
     pub fn jit_insn_new_block(func: jit_function_t) -> ::std::os::raw::c_int;
 
+    /// Load the contents of `value` into a new temporary, essentially duplicating the value. Constants are not duplicated.
     pub fn jit_insn_load(func: jit_function_t, value: jit_value_t) -> jit_value_t;
 
+    /// This is the same as [`jit_insn_load`], but the name may better reflect how it is used in some front ends.
     pub fn jit_insn_dup(func: jit_function_t, value: jit_value_t) -> jit_value_t;
 
+    /// Store the contents of `value` at the location referred to by `dest`. The `dest` should be a [`jit_value_t`] representing a local variable or temporary. Use [`jit_insn_store_relative`] to store to a location referred to by a pointer.
     pub fn jit_insn_store(
         func: jit_function_t,
         dest: jit_value_t,
         value: jit_value_t,
     ) -> ::std::os::raw::c_int;
 
+    /// Load a value of the specified type from the effective address (`value + offset`), where `value` is a pointer.
     pub fn jit_insn_load_relative(
         func: jit_function_t,
         value: jit_value_t,
@@ -1522,6 +1546,7 @@ extern "C" {
         type_: jit_type_t,
     ) -> jit_value_t;
 
+    /// Store value at the effective address (`dest + offset`), where `dest` is a pointer. Returns a non-zero value on success.
     pub fn jit_insn_store_relative(
         func: jit_function_t,
         dest: jit_value_t,
@@ -1529,12 +1554,14 @@ extern "C" {
         value: jit_value_t,
     ) -> ::std::os::raw::c_int;
 
+    /// Add the constant `offset` to the specified pointer `value`. This is functionally identical to calling [`jit_insn_add`], but the JIT can optimize the code better if it knows that the addition is being used to perform a relative adjustment on a pointer. In particular, multiple relative adjustments on the same pointer can be collapsed into a single adjustment.
     pub fn jit_insn_add_relative(
         func: jit_function_t,
         value: jit_value_t,
         offset: jit_nint,
     ) -> jit_value_t;
 
+    /// Load an element of type `elem_type` from position `index` within the array starting at `base_addr`. The effective address of the array element is `base_addr + index * sizeof(elem_type)`.
     pub fn jit_insn_load_elem(
         func: jit_function_t,
         base_addr: jit_value_t,
@@ -1542,6 +1569,7 @@ extern "C" {
         elem_type: jit_type_t,
     ) -> jit_value_t;
 
+    /// Load the effective address of an `element` of type `elem_type` at position `index` within the array starting at `base_addr`. Essentially, this computes the expression `base_addr + index * sizeof(elem_type)`, but may be more efficient than performing the steps with [`jit_insn_mul`] and [`jit_insn_add`].
     pub fn jit_insn_load_elem_address(
         func: jit_function_t,
         base_addr: jit_value_t,
@@ -1549,6 +1577,7 @@ extern "C" {
         elem_type: jit_type_t,
     ) -> jit_value_t;
 
+    /// Store `value` at position `index` of the array starting at `base_addr`. The effective address of the storage location is `base_addr + index * sizeof(jit_value_get_type(value))`.
     pub fn jit_insn_store_elem(
         func: jit_function_t,
         base_addr: jit_value_t,
@@ -1556,160 +1585,190 @@ extern "C" {
         value: jit_value_t,
     ) -> ::std::os::raw::c_int;
 
+    /// Check `value` to see if it is NULL. If it is, then throw the built-in [`JIT_RESULT_NULL_REFERENCE`] exception.
     pub fn jit_insn_check_null(func: jit_function_t, value: jit_value_t) -> ::std::os::raw::c_int;
 
+    /// Emits "no operation" instruction. You may want to do that if you need an empty block to move it with `jit_insn_move_blocks_XXX` later. If you will not put empty instruction between two labels, both labels will point to the same block, and block moving will fail.
     pub fn jit_insn_nop(func: jit_function_t) -> ::std::os::raw::c_int;
 
+    /// Add two values together and return the result in a new temporary value.
     pub fn jit_insn_add(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Add two values together and return the result in a new temporary value. Throw an exception if overflow occurs.
     pub fn jit_insn_add_ovf(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Subtract two values and return the result in a new temporary value.
     pub fn jit_insn_sub(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Subtract two values and return the result in a new temporary value. Throw an exception if overflow occurs.
     pub fn jit_insn_sub_ovf(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Multiply two values and return the result in a new temporary value.
     pub fn jit_insn_mul(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Multiply two values and return the result in a new temporary value. Throw an exception if overflow occurs.
     pub fn jit_insn_mul_ovf(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Divide two values and return the quotient in a new temporary value. Throws an exception on division by zero or arithmetic error (an arithmetic error is one where the minimum possible signed integer value is divided by -1).
     pub fn jit_insn_div(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Divide two values and return the remainder in a new temporary value. Throws an exception on division by zero or arithmetic error (an arithmetic error is one where the minimum possible signed integer value is divided by -1).
     pub fn jit_insn_rem(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Divide two values and return the remainder in a new temporary value. Throws an exception on division by zero or arithmetic error (an arithmetic error is one where the minimum possible signed integer value is divided by -1). This function is identical to [`jit_insn_rem`], except that it uses IEEE rules for computing the remainder of floating-point values.
     pub fn jit_insn_rem_ieee(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Negate a value and return the result in a new temporary value.
     pub fn jit_insn_neg(func: jit_function_t, value1: jit_value_t) -> jit_value_t;
 
+    /// Bitwise AND two values and return the result in a new temporary value.
     pub fn jit_insn_and(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Bitwise OR two values and return the result in a new temporary value.
     pub fn jit_insn_or(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Bitwise XOR two values and return the result in a new temporary value.
     pub fn jit_insn_xor(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Bitwise NOT a value and return the result in a new temporary value.
     pub fn jit_insn_not(func: jit_function_t, value1: jit_value_t) -> jit_value_t;
 
+    /// Perform a bitwise left shift on two values and return the result in a new temporary value.
     pub fn jit_insn_shl(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Perform a bitwise right shift on two values and return the result in a new temporary value. This performs a signed shift on signed operators, and an unsigned shift on unsigned operands.
     pub fn jit_insn_shr(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Perform a bitwise right shift on two values and return the result in a new temporary value. This performs an unsigned shift on both signed and unsigned operands.
     pub fn jit_insn_ushr(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Perform a bitwise right shift on two values and return the result in a new temporary value. This performs an signed shift on both signed and unsigned operands.
     pub fn jit_insn_sshr(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Compare two values for equality and return the result in a new temporary value.
     pub fn jit_insn_eq(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Compare two values for inequality and return the result in a new temporary value.
     pub fn jit_insn_ne(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Compare two values for less than and return the result in a new temporary value.
     pub fn jit_insn_lt(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Compare two values for less than or equal and return the result in a new temporary value.
     pub fn jit_insn_le(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Compare two values for greater than and return the result in a new temporary value.
     pub fn jit_insn_gt(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Compare two values for greater than or equal and return the result in a new temporary value.
     pub fn jit_insn_ge(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Compare two values, and return a -1, 0, or 1 result. If either value is "not a number", then -1 is returned.
     pub fn jit_insn_cmpl(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Compare two values, and return a -1, 0, or 1 result. If either value is "not a number", then 1 is returned.
     pub fn jit_insn_cmpg(
         func: jit_function_t,
         value1: jit_value_t,
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Convert a value into a boolean 0 or 1 result of type [`jit_type_int`].
     pub fn jit_insn_to_bool(func: jit_function_t, value1: jit_value_t) -> jit_value_t;
 
+    /// Convert a value into a boolean 1 or 0 result of type [`jit_type_int`] (i.e. the inverse of [`jit_insn_to_bool`]).
     pub fn jit_insn_to_not_bool(func: jit_function_t, value1: jit_value_t) -> jit_value_t;
 
     pub fn jit_insn_acos(func: jit_function_t, value1: jit_value_t) -> jit_value_t;
@@ -1724,6 +1783,7 @@ extern "C" {
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Round `value1` up towads positive infinity.
     pub fn jit_insn_ceil(func: jit_function_t, value1: jit_value_t) -> jit_value_t;
 
     pub fn jit_insn_cos(func: jit_function_t, value1: jit_value_t) -> jit_value_t;
@@ -1732,6 +1792,7 @@ extern "C" {
 
     pub fn jit_insn_exp(func: jit_function_t, value1: jit_value_t) -> jit_value_t;
 
+    /// Round `value1` down towards negative infinity.
     pub fn jit_insn_floor(func: jit_function_t, value1: jit_value_t) -> jit_value_t;
 
     pub fn jit_insn_log(func: jit_function_t, value1: jit_value_t) -> jit_value_t;
@@ -1744,8 +1805,10 @@ extern "C" {
         value2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Round `value1` to the nearest integer. Half-way cases are rounded to the even number.
     pub fn jit_insn_rint(func: jit_function_t, value1: jit_value_t) -> jit_value_t;
 
+    /// Round `value1` to the nearest integer. Half-way cases are rounded away from zero.
     pub fn jit_insn_round(func: jit_function_t, value1: jit_value_t) -> jit_value_t;
 
     pub fn jit_insn_sin(func: jit_function_t, value1: jit_value_t) -> jit_value_t;
@@ -1758,6 +1821,7 @@ extern "C" {
 
     pub fn jit_insn_tanh(func: jit_function_t, value1: jit_value_t) -> jit_value_t;
 
+    /// Round `value1` towards zero.
     pub fn jit_insn_trunc(func: jit_function_t, value1: jit_value_t) -> jit_value_t;
 
     pub fn jit_insn_is_nan(func: jit_function_t, value1: jit_value_t) -> jit_value_t;
@@ -1782,20 +1846,28 @@ extern "C" {
 
     pub fn jit_insn_sign(func: jit_function_t, value1: jit_value_t) -> jit_value_t;
 
+    /// Terminate the current block by branching unconditionally to a specific label. Returns zero if out of memory.
     pub fn jit_insn_branch(func: jit_function_t, label: *mut jit_label_t) -> ::std::os::raw::c_int;
 
+    /// Terminate the current block by branching to a specific label if the specified value is non-zero. Returns zero if out of memory.
+    ///
+    /// If value refers to a conditional expression that was created by [`jit_insn_eq`], [`jit_insn_ne`], etc, then the conditional expression will be replaced by an appropriate conditional branch instruction.
     pub fn jit_insn_branch_if(
         func: jit_function_t,
         value: jit_value_t,
         label: *mut jit_label_t,
     ) -> ::std::os::raw::c_int;
 
+    /// Terminate the current block by branching to a specific label if the specified value is zero. Returns zero if out of memory.
+    ///
+    /// If value refers to a conditional expression that was created by [`jit_insn_eq`], [`jit_insn_ne`], etc, then the conditional expression will be followed by an appropriate conditional branch instruction, instead of a value load.
     pub fn jit_insn_branch_if_not(
         func: jit_function_t,
         value: jit_value_t,
         label: *mut jit_label_t,
     ) -> ::std::os::raw::c_int;
 
+    /// Branch to a label from the `labels` table. The `value` is the index of the label. It is allowed to have identical labels in the table. If an entry in the table has [`jit_label_undefined`] value then it is replaced with a newly allocated label.
     pub fn jit_insn_jump_table(
         func: jit_function_t,
         value: jit_value_t,
@@ -1803,10 +1875,13 @@ extern "C" {
         num_labels: ::std::os::raw::c_uint,
     ) -> ::std::os::raw::c_int;
 
+    /// Get the address of a value into a new temporary.
     pub fn jit_insn_address_of(func: jit_function_t, value1: jit_value_t) -> jit_value_t;
 
+    /// Get the address of `label` into a new temporary. This is typically used for exception handling, to track where in a function an exception was actually thrown.
     pub fn jit_insn_address_of_label(func: jit_function_t, label: *mut jit_label_t) -> jit_value_t;
 
+    /// Convert the contents of a value into a new type, with optional overflow checking.
     pub fn jit_insn_convert(
         func: jit_function_t,
         value: jit_value_t,
@@ -1814,6 +1889,19 @@ extern "C" {
         overflow_check: ::std::os::raw::c_int,
     ) -> jit_value_t;
 
+    /// Call the function `jit_func`, which may or may not be translated yet. The name is for diagnostic purposes only, and can be NULL.
+    ///
+    /// If `signature` is NULL, then the actual signature of `jit_func` is used in its place. This is the usual case. However, if the function takes a variable number of arguments, then you may need to construct an explicit signature for the non-fixed argument values.
+    ///
+    /// The `flags` parameter specifies additional information about the type of call to perform:
+    ///
+    /// | Flag | Description |
+    /// | ---- | ----------- |
+    /// | `JIT_CALL_NOTHROW` | The function never throws exceptions. |
+    /// | `JIT_CALL_NORETURN` | The function will never return directly to its caller. It may however return to the caller indirectly by throwing an exception that the caller catches. |
+    /// | `JIT_CALL_TAIL` | Apply tail call optimizations, as the result of this function call will be immediately returned from the containing function. Tail calls are only appropriate when the signature of the called function matches the callee, and none of the parameters point to local variables. |
+    ///
+    /// If `jit_func` has already been compiled, then [`jit_insn_call`] may be able to intuit some of the above flags for itself. Otherwise it is up to the caller to determine when the flags may be appropriate.
     pub fn jit_insn_call(
         func: jit_function_t,
         name: *const ::std::os::raw::c_char,
@@ -1824,6 +1912,7 @@ extern "C" {
         flags: ::std::os::raw::c_int,
     ) -> jit_value_t;
 
+    /// Call a function via an indirect pointer.
     pub fn jit_insn_call_indirect(
         func: jit_function_t,
         value: jit_value_t,
@@ -1833,6 +1922,7 @@ extern "C" {
         flags: ::std::os::raw::c_int,
     ) -> jit_value_t;
 
+    /// Call a jit function that is nested via an indirect pointer. `parent_frame` should be a pointer to the frame of the parent of `*value`.
     pub fn jit_insn_call_nested_indirect(
         func: jit_function_t,
         value: jit_value_t,
@@ -1843,6 +1933,7 @@ extern "C" {
         flags: ::std::os::raw::c_int,
     ) -> jit_value_t;
 
+    /// Call a function via an indirect pointer. This version differs from [`jit_insn_call_indirect`] in that we assume that `value` contains a pointer that resulted from calling [`jit_function_to_vtable_pointer`]. Indirect vtable pointer calls may be more efficient on some platforms than regular indirect calls.
     pub fn jit_insn_call_indirect_vtable(
         func: jit_function_t,
         value: jit_value_t,
@@ -1852,6 +1943,7 @@ extern "C" {
         flags: ::std::os::raw::c_int,
     ) -> jit_value_t;
 
+    /// Output an instruction that calls an external native function. The `name` is for diagnostic purposes only, and can be NULL.
     pub fn jit_insn_call_native(
         func: jit_function_t,
         name: *const ::std::os::raw::c_char,
@@ -1862,6 +1954,20 @@ extern "C" {
         flags: ::std::os::raw::c_int,
     ) -> jit_value_t;
 
+    /// Output an instruction that calls an intrinsic function.
+    ///
+    /// The descriptor contains the following fields:
+    ///
+    /// | Field | Description |
+    /// | ----- | ----------- |
+    /// | return_type | The type of value that is returned from the intrinsic. |
+    /// | ptr_result_type | This should be NULL for an ordinary intrinsic, or the result type if the intrinsic reports exceptions. |
+    /// | arg1_type | The type of the first argument. |
+    /// | arg2_type | The type of the second argument, or NULL for a unary intrinsic. |
+    ///
+    /// If all of the arguments are constant, then [`jit_insn_call_intrinsic`] will call the intrinsic directly to calculate the constant result. If the constant computation will result in an exception, then code is output to cause the exception at runtime.
+    ///
+    /// The `name` is for diagnostic purposes only, and can be NULL.
     pub fn jit_insn_call_intrinsic(
         func: jit_function_t,
         name: *const ::std::os::raw::c_char,
@@ -1871,30 +1977,45 @@ extern "C" {
         arg2: jit_value_t,
     ) -> jit_value_t;
 
+    /// Output an instruction that notes that the contents of `value` can be found in the register `reg` at this point in the code.
+    ///
+    /// You normally wouldn’t call this yourself - it is used internally by the CPU back ends to set up the function’s entry frame and the values of registers on return from a subroutine call.
     pub fn jit_insn_incoming_reg(
         func: jit_function_t,
         value: jit_value_t,
         reg: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 
+    /// Output an instruction that notes that the contents of `value` can be found in the stack frame at `frame_offset`. This should only be called once per value, to prevent values from changing their address when they might be addressable.
+    ///
+    /// You normally wouldn’t call this yourself - it is used internally by the CPU back ends to set up the function’s entry frame.
     pub fn jit_insn_incoming_frame_posn(
         func: jit_function_t,
         value: jit_value_t,
         frame_offset: jit_nint,
     ) -> ::std::os::raw::c_int;
 
+    /// Output an instruction that copies the contents of `value` into the register `reg` at this point in the code. This is typically used just before making an outgoing subroutine call.
+    ///
+    /// You normally wouldn’t call this yourself - it is used internally by the CPU back ends to set up the registers for a subroutine call.
     pub fn jit_insn_outgoing_reg(
         func: jit_function_t,
         value: jit_value_t,
         reg: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 
+    /// Output an instruction that stores the contents of `value` in the stack frame at `frame_offset`.
+    ///
+    /// You normally wouldn’t call this yourself - it is used internally by the CPU back ends to set up an outgoing frame for tail calls.
     pub fn jit_insn_outgoing_frame_posn(
         func: jit_function_t,
         value: jit_value_t,
         frame_offset: jit_nint,
     ) -> ::std::os::raw::c_int;
 
+    /// Output an instruction that notes that the contents of `value` can be found in the register `reg` at this point in the code. This is similar to [`jit_insn_incoming_reg`], except that it refers to return values, not parameter values.
+    ///
+    /// You normally wouldn’t call this yourself - it is used internally by the CPU back ends to handle returns from subroutine calls.
     pub fn jit_insn_return_reg(
         func: jit_function_t,
         value: jit_value_t,
@@ -1907,32 +2028,44 @@ extern "C" {
         reg: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 
+    /// Flush a small structure return value out of registers and back into the local variable frame. You normally wouldn’t call this yourself - it is used internally by the CPU back ends to handle structure returns from functions.
     pub fn jit_insn_flush_struct(func: jit_function_t, value: jit_value_t)
         -> ::std::os::raw::c_int;
 
+    /// Retrieve the frame pointer of function `func`. Returns NULL if out of memory.
     pub fn jit_insn_get_frame_pointer(func: jit_function_t) -> jit_value_t;
 
+    /// Retrieve the frame pointer of the parent of `target`. Returns NULL when `target` is not a sibling, an ancestor, or a sibling of one of the ancestors of `func`. Returns NULL if out of memory.
     pub fn jit_insn_get_parent_frame_pointer_of(
         func: jit_function_t,
         target: jit_function_t,
     ) -> jit_value_t;
 
+    /// Import `value` from an outer nested scope into `func`. Returns the effective address of the value for local access via a pointer. Returns NULL if out of memory or the value is not accessible via a parent, grandparent, or other ancestor of `func`.
     pub fn jit_insn_import(func: jit_function_t, value: jit_value_t) -> jit_value_t;
 
+    /// Push a value onto the function call stack, in preparation for a call. You normally wouldn’t call this yourself - it is used internally by the CPU back ends to set up the stack for a subroutine call.
     pub fn jit_insn_push(func: jit_function_t, value: jit_value_t) -> ::std::os::raw::c_int;
 
+    /// Push `*value` onto the function call stack, in preparation for a call. This is normally used for returning `struct` and `union` values where you have the effective address of the structure, rather than the structure’s contents, in `value`.
+    ///
+    /// You normally wouldn’t call this yourself - it is used internally by the CPU back ends to set up the stack for a subroutine call.
     pub fn jit_insn_push_ptr(
         func: jit_function_t,
         value: jit_value_t,
         type_: jit_type_t,
     ) -> ::std::os::raw::c_int;
 
+    /// Set the parameter `slot` at offset in the outgoing parameter area to `value`. This may be used instead of [`jit_insn_push`] if it is more efficient to store directly to the stack than to push. The outgoing parameter area is allocated within the frame when the function is first entered.  
+    ///
+    /// You normally wouldn’t call this yourself - it is used internally by the CPU back ends to set up the stack for a subroutine call.
     pub fn jit_insn_set_param(
         func: jit_function_t,
         value: jit_value_t,
         offset: jit_nint,
     ) -> ::std::os::raw::c_int;
 
+    /// Same as [`jit_insn_set_param`], except that the parameter is at `*value`.
     pub fn jit_insn_set_param_ptr(
         func: jit_function_t,
         value: jit_value_t,
@@ -1940,40 +2073,55 @@ extern "C" {
         offset: jit_nint,
     ) -> ::std::os::raw::c_int;
 
+    /// Push the interpreter’s return area pointer onto the stack. You normally wouldn’t call this yourself - it is used internally by the CPU back ends to set up the stack for a subroutine call.
     pub fn jit_insn_push_return_area_ptr(func: jit_function_t) -> ::std::os::raw::c_int;
 
+    /// Pop `num_items` items from the function call stack. You normally wouldn’t call this yourself - it is used by CPU back ends to clean up the stack after calling a subroutine. The size of an item is specific to the back end (it could be bytes, words, or some other measurement).
     pub fn jit_insn_pop_stack(func: jit_function_t, num_items: jit_nint) -> ::std::os::raw::c_int;
 
+    /// This is similar to [`jit_insn_pop_stack`], except that it tries to defer the pop as long as possible. Multiple subroutine calls may result in parameters collecting up on the stack, and only being popped at the next branch or label instruction. You normally wouldn’t call this yourself - it is used by CPU back ends.
     pub fn jit_insn_defer_pop_stack(
         func: jit_function_t,
         num_items: jit_nint,
     ) -> ::std::os::raw::c_int;
 
+    /// Flush any deferred items that were scheduled for popping by [`jit_insn_defer_pop_stack`] if there are `num_items` or more items scheduled. You normally wouldn’t call this yourself - it is used by CPU back ends to clean up the stack just prior to a subroutine call when too many items have collected up. Calling `jit_insn_flush_defer_pop(func, 0)` will flush all deferred items.
     pub fn jit_insn_flush_defer_pop(
         func: jit_function_t,
         num_items: jit_nint,
     ) -> ::std::os::raw::c_int;
 
+    /// Output an instruction to return `value` as the function’s result. If `value` is NULL, then the function is assumed to return `void`. If the function returns a structure, this will copy the value into the memory at the structure return address.
     pub fn jit_insn_return(func: jit_function_t, value: jit_value_t) -> ::std::os::raw::c_int;
 
+    /// Output an instruction to return `*value` as the function’s result. This is normally used for returning `struct` and `union` values where you have the effective address of the structure, rather than the structure’s contents, in `value`.
     pub fn jit_insn_return_ptr(
         func: jit_function_t,
         value: jit_value_t,
         type_: jit_type_t,
     ) -> ::std::os::raw::c_int;
 
+    /// Add an instruction to return a default value if control reaches this point. This is typically used at the end of a function to ensure that all paths return to the caller. Returns zero if out of memory, 1 if a default return was added, and 2 if a default return was not needed.
+    ///
+    /// Note: if this returns 1, but the function signature does not return void, then it indicates that a higher-level language error has occurred and the function should be abandoned.
     pub fn jit_insn_default_return(func: jit_function_t) -> ::std::os::raw::c_int;
 
+    /// Throw a pointer `value` as an exception object. This can also be used to "rethrow" an object from a catch handler that is not interested in handling the exception.
     pub fn jit_insn_throw(func: jit_function_t, value: jit_value_t) -> ::std::os::raw::c_int;
 
+    /// Get an object that represents the current position in the code, and all of the functions that are currently on the call stack. This is equivalent to calling [`jit_exception_get_stack_trace`], and is normally used just prior to [`jit_insn_throw`] to record the location of the exception that is being thrown.
     pub fn jit_insn_get_call_stack(func: jit_function_t) -> jit_value_t;
 
+    /// Get the value that holds the most recent thrown exception. This is typically used in `catch` clauses.
     pub fn jit_insn_thrown_exception(func: jit_function_t) -> jit_value_t;
 
+    /// Notify the function building process that func contains some form of `catch` clause for catching exceptions. This must be called before any instruction that is covered by a `try`, ideally at the start of the function output process.
     pub fn jit_insn_uses_catcher(func: jit_function_t) -> ::std::os::raw::c_int;
 
+    /// Start the catcher block for `func`. There should be exactly one catcher block for any function that involves a `try`. All exceptions that are thrown within the function will cause control to jump to this point. Returns a value that holds the exception that was thrown.
     pub fn jit_insn_start_catcher(func: jit_function_t) -> jit_value_t;
 
+    /// Branch to `label` if the program counter where an exception occurred does not fall between `start_label` and `end_label`.
     pub fn jit_insn_branch_if_pc_not_in_range(
         func: jit_function_t,
         start_label: jit_label_t,
@@ -1981,31 +2129,44 @@ extern "C" {
         label: *mut jit_label_t,
     ) -> ::std::os::raw::c_int;
 
+    /// Rethrow the current exception because it cannot be handled by any of the `catch` blocks in the current function.
+    ///
+    /// Note: this is intended for use within catcher blocks. It should not be used to rethrow exceptions in response to programmer requests (e.g. throw; in C#). The [`jit_insn_throw`] function should be used for that purpose.
     pub fn jit_insn_rethrow_unhandled(func: jit_function_t) -> ::std::os::raw::c_int;
 
+    /// Start a `finally` clause.
     pub fn jit_insn_start_finally(
         func: jit_function_t,
         finally_label: *mut jit_label_t,
     ) -> ::std::os::raw::c_int;
 
+    /// Return from the `finally` clause to where it was called from. This is usually the last instruction in a `finally` clause.
     pub fn jit_insn_return_from_finally(func: jit_function_t) -> ::std::os::raw::c_int;
 
+    /// Call a `finally` clause.
     pub fn jit_insn_call_finally(
         func: jit_function_t,
         finally_label: *mut jit_label_t,
     ) -> ::std::os::raw::c_int;
 
+    /// Define the start of a filter. Filters are embedded subroutines within functions that are used to filter exceptions in `catch` blocks.
+    ///
+    /// A filter subroutine takes a single argument (usually a pointer) and returns a single result (usually a boolean). The filter has complete access to the local variables of the function, and can use any of them in the filtering process.
+    ///
+    /// This function returns a temporary value of the specified `type`, indicating the parameter that is supplied to the filter.
     pub fn jit_insn_start_filter(
         func: jit_function_t,
         label: *mut jit_label_t,
         type_: jit_type_t,
     ) -> jit_value_t;
 
+    /// Return from a filter subroutine with the specified `value` as its result.
     pub fn jit_insn_return_from_filter(
         func: jit_function_t,
         value: jit_value_t,
     ) -> ::std::os::raw::c_int;
 
+    /// Call the filter subroutine at `label`, passing it value as its argument. This function returns a value of the specified `type`, indicating the filter’s result.
     pub fn jit_insn_call_filter(
         func: jit_function_t,
         label: *mut jit_label_t,
@@ -2013,6 +2174,7 @@ extern "C" {
         type_: jit_type_t,
     ) -> jit_value_t;
 
+    /// Copy the `size` bytes of memory at `src` to `dest`. It is assumed that the source and destination do not overlap.
     pub fn jit_insn_memcpy(
         func: jit_function_t,
         dest: jit_value_t,
@@ -2020,6 +2182,7 @@ extern "C" {
         size: jit_value_t,
     ) -> ::std::os::raw::c_int;
 
+    /// Copy the `size` bytes of memory at `src` to `dest`. This is safe to use if the source and destination overlap.
     pub fn jit_insn_memmove(
         func: jit_function_t,
         dest: jit_value_t,
@@ -2027,6 +2190,7 @@ extern "C" {
         size: jit_value_t,
     ) -> ::std::os::raw::c_int;
 
+    /// Set the `size` bytes at `dest` to `value`.
     pub fn jit_insn_memset(
         func: jit_function_t,
         dest: jit_value_t,
@@ -2034,20 +2198,24 @@ extern "C" {
         size: jit_value_t,
     ) -> ::std::os::raw::c_int;
 
+    /// Allocate `size` bytes of memory from the stack.
     pub fn jit_insn_alloca(func: jit_function_t, size: jit_value_t) -> jit_value_t;
 
+    /// Move all of the blocks between `from_label` (inclusive) and `to_label` (exclusive) to the end of the current function. This is typically used to move the expression in a `while` loop to the end of the body, where it can be executed more efficiently.
     pub fn jit_insn_move_blocks_to_end(
         func: jit_function_t,
         from_label: jit_label_t,
         to_label: jit_label_t,
     ) -> ::std::os::raw::c_int;
 
+    /// Move all of the blocks between `from_label` (inclusive) and `to_label` (exclusive) to the start of the current function. This is typically used to move initialization code to the head of the function.
     pub fn jit_insn_move_blocks_to_start(
         func: jit_function_t,
         from_label: jit_label_t,
         to_label: jit_label_t,
     ) -> ::std::os::raw::c_int;
 
+    /// Mark the current position in `func` as corresponding to the specified bytecode `offset`. This value will be returned byw]lysw`jit_stack_trace_get_offset, and is useful for associating code positions with source line numbers.
     pub fn jit_insn_mark_offset(func: jit_function_t, offset: jit_int) -> ::std::os::raw::c_int;
 
     pub fn jit_insn_mark_breakpoint(
@@ -2062,12 +2230,16 @@ extern "C" {
         data2: jit_value_t,
     ) -> ::std::os::raw::c_int;
 
+    /// Initialize an iterator to point to the first instruction in `block`.
     pub fn jit_insn_iter_init(iter: *mut jit_insn_iter_t, block: jit_block_t);
 
+    /// Initialize an iterator to point to the last instruction in `block`.
     pub fn jit_insn_iter_init_last(iter: *mut jit_insn_iter_t, block: jit_block_t);
 
+    /// Get the next instruction in an iterator’s block. Returns NULL when there are no further instructions in the block.
     pub fn jit_insn_iter_next(iter: *mut jit_insn_iter_t) -> jit_insn_t;
 
+    /// Get the previous instruction in an iterator’s block. Returns NULL when there are no further instructions in the block.
     pub fn jit_insn_iter_previous(iter: *mut jit_insn_iter_t) -> jit_insn_t;
 
     pub fn jit_int_add(value1: jit_int, value2: jit_int) -> jit_int;
