@@ -4,6 +4,7 @@ description = "libjit in rust"
 version = "0.1.2"
 edition = "2018"
 license = "MIT"
+readme = "readme.md"
 
 repository = "https://github.com/MonliH/jit-sys"
 
